@@ -16,7 +16,7 @@
 #include "protocol.h"
 
 // Defines
-//#define DEBUG
+#define DEBUG
 
 int main(int argc, char *argv[])
 {
@@ -194,13 +194,14 @@ int main(int argc, char *argv[])
       {
         fprintf(stderr, "Server responded with calcMessage\n");
         struct calcMessage* temp = (struct calcMessage*)&pBuffer;
-        if(temp->message == 2)
+        if(ntohl(temp->message) == 2)
         {
           return 9;
         }
       }
       else if(recvBytes == sizeof (struct calcProtocol))
       {
+        printf("Recieved calcProt from server.\n");
         break;
       }
 
@@ -213,11 +214,11 @@ int main(int argc, char *argv[])
   uint16_t pType = ntohs(pBuffer.type);
   uint16_t pMajor = ntohs(pBuffer.major_version);
   uint16_t pMinor = ntohs(pBuffer.minor_version);
-  uint16_t pID = ntohl(pBuffer.id);
-  uint16_t pArith = ntohl(pBuffer.arith);
-  uint16_t firstIntValue = ntohl(pBuffer.inValue1);
-  uint16_t secondIntValue = ntohl(pBuffer.inValue2);
-  uint16_t intResult = ntohl(pBuffer.inResult);
+  uint32_t pID = ntohl(pBuffer.id);
+  uint32_t pArith = ntohl(pBuffer.arith);
+  int32_t firstIntValue = ntohl(pBuffer.inValue1);
+  int32_t secondIntValue = ntohl(pBuffer.inValue2);
+  int32_t intResult = ntohl(pBuffer.inResult);
   double firstFloatValue = pBuffer.flValue1;
   double secondFloatValue = pBuffer.flValue2;
   double floatResult = pBuffer.flResult;
@@ -339,13 +340,11 @@ int main(int argc, char *argv[])
     printf("OK\n");
     
   }
-
   else if(ntohl(mBuffer.message == 0))
   {
     fprintf(stderr, "Server responded with Not applicable/available\n");
     return 13;
   }
-
   else
   {
     if(attemptsLeft == 0)
