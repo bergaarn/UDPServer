@@ -37,20 +37,13 @@ struct Client
 
 void checkJobList(int signum)
 {
-  printf("Let me be, I want to sleep.\n");
+  printf("Cleared clientList...\n");
 
   if(loopCount > 20)
   {
     printf("I had enough.\n");
     terminate = 1;
   }
-
-  /*
-  if (noClients > 0)
-  {
-    noClients--;
-  }
-  */
 
   return;
 }
@@ -161,15 +154,16 @@ int main(int argc, char *argv[])
   // Main Loop
   while (terminate == 0)
   {
+   /*
     printf("Number of Loops: %d times.\n",loopCount);
     sleep(1);
+  */
     loopCount++;
 
-    printf("Waiting for incoming clients...\n");
+    printf("\nWaiting for incoming clients...\n");
 
     // Redirect client depending on message
     rv = recvfrom(sockFD, &mBuffer, sizeof(pBuffer), 0, (struct sockaddr*)&clientAddr, &clientLen);
-    printf("Recieved %d bytes\n", rv);
 
     // recvfrom error
     if (rv < 0)
@@ -189,13 +183,14 @@ int main(int argc, char *argv[])
     else if (rv == sizeof(calcMessage))
     {
 
-      printf("Type: %d | Message: %d | Protocol: %d | Major: %d | Minor: %d\n",
+      /*printf("Type: %d | Message: %d | Protocol: %d | Major: %d | Minor: %d\n",
       ntohs(mBuffer.type), ntohl(mBuffer.message), ntohs(mBuffer.protocol), ntohs(mBuffer.major_version), ntohs(mBuffer.minor_version));
-      
+      */
+
       // Client sends succesfully
       if (ntohs(mBuffer.type) == 22 && ntohl(mBuffer.message) == 0 && ntohs(mBuffer.protocol) == 17 && ntohs(mBuffer.major_version) == 1 && ntohs(mBuffer.minor_version) == 0)
       {
-        printf("Recieved calcMessage from ");
+        printf("Recieved %d bytes calcMessage from ", rv);
         printf("IP and Port | %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
 
         // Prepare protocol message
@@ -206,6 +201,7 @@ int main(int argc, char *argv[])
         
         // Create Assignment
         char* typeHolder = randomType();
+        int resultInt;
 
         // Float Assignment
         if (typeHolder[0] == 'f')
@@ -241,34 +237,37 @@ int main(int argc, char *argv[])
             printf("No Float typeholder found.\n");
             continue;
           }
-        }
+
+          printf("Float 1: %8.8g | Float 2: %8.8g\n", nc.protoAns.flValue1, nc.protoAns.flValue2);
+        } // End of Float Case
+
         else
         {
-          // Int Assignment
           nc.protoAns.flValue1 = htonl(0);
           nc.protoAns.flValue2 = htonl(0);
           
-          nc.protoAns.inValue1 = htonl(randomInt());
-          nc.protoAns.inValue2 = htonl(randomInt());
+          int firstInt = randomInt();
+          int secondInt = randomInt();
+      
 
           if (strcmp(typeHolder, "add") == 0)
           {
-            nc.protoAns.inResult = htonl(nc.protoAns.inValue1 + nc.protoAns.inValue2);
+            resultInt = (firstInt + secondInt);
             nc.protoAns.arith = htonl(1);
           }
           else if (strcmp(typeHolder, "sub") == 0)
           {
-            nc.protoAns.inResult = htonl(nc.protoAns.inValue1 - nc.protoAns.inValue2);
+            resultInt = (firstInt - secondInt);
             nc.protoAns.arith = htonl(2);
           }
           else if (strcmp(typeHolder, "mul") == 0)
           {
-            nc.protoAns.inResult = htonl(nc.protoAns.inValue1 * nc.protoAns.inValue2);
+            resultInt = (firstInt * secondInt);
             nc.protoAns.arith = htonl(3);
           }
           else if (strcmp(typeHolder, "div") == 0)
           {
-            nc.protoAns.inResult = htonl(nc.protoAns.inValue1 / nc.protoAns.inValue2);
+            resultInt = (firstInt / secondInt);
             nc.protoAns.arith = htonl(4);
           }
           else
@@ -276,15 +275,17 @@ int main(int argc, char *argv[])
             printf("No Int typeholder found.\n");
             continue;
           }
-        }  
 
-        // Set Answer to 0 before sending
-        nc.protoAns.flResult = htonl(0);
-        nc.protoAns.inResult = htonl(0);
+          // Prepare Operation for client
+          nc.protoAns.inValue1 = htonl(firstInt);
+          nc.protoAns.inValue2 = htonl(secondInt);
+          nc.protoAns.inResult = htonl(resultInt);
+          
+          printf("Int 1: %d | Int 2: %d\n", firstInt, secondInt);
+          printf("%d | %d\n", ntohl(nc.protoAns.inResult), resultInt);
 
-        printf("Float 1: %8.8g\t Float 2: %8.8g\n", nc.protoAns.flValue1, nc.protoAns.flValue2);
-        printf("Int 1: %d\t Int 2: %d\n", nc.protoAns.inValue1, nc.protoAns.inValue2);
-
+        }  // End of Int Case
+        
         // Send assignment to client
         rv = sendto(sockFD, &nc.protoAns, sizeof(nc.protoAns), 0, (struct sockaddr*)&clientAddr, clientLen);
         if (rv < 1)
@@ -294,8 +295,11 @@ int main(int argc, char *argv[])
         }
         else
         {
-          printf("Sent %d bytes to %s:%d\n", rv,  inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
+          printf("Sent %d bytes to %s:%d\n", rv, inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
           clientList[noClients++] = nc;
+  
+         
+
 
           // set client timer to 10sec
         }
@@ -317,32 +321,85 @@ int main(int argc, char *argv[])
     // client sent protocol answer
     else if (rv == sizeof (calcProtocol))
     {
+      struct calcProtocol* pBuffer = (struct calcProtocol*)&mBuffer;
       printf("Recieved calcProtocol from IP and Port | %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
-
-      for (int i = 0; i < 30; i++)
+      bool clientFound = false;
+      int i;
+      for (i = 0; i < 30; i++)
       {
-        if(inet_ntoa(clientAddr.sin_addr) == clientList[i], ntohs(clientAddr.sin_port))
+        // If Client exists in the list
+        if(pBuffer->id == clientList[i].protoAns.id)   
+        {
+          printf("Client #%d found in list\n", i);
+          clientFound = true;
+          break;
+        }
       }
 
-      // Check client ID
-
-      // Check client addr
-
-      // Check client port
-
-      // Assignment
+      if (!clientFound)
+      {
+        printf("No Client was found.\n");
+        continue;
+      }
 
       // Check Clients answer
+      memset(&mBuffer, 0, sizeof(mBuffer));
+      mBuffer.major_version = htons(1);
+      mBuffer.minor_version = htons(0);
+      mBuffer.protocol = htons(17);
+      mBuffer.type = htons(2);
+      
+      // if assignment is float
+      if (ntohl(clientList[i].protoAns.arith) > 4)
+      {
+        printf("Server's Answer: %8.8g | Client's Answer: %8.8g\n", clientList->protoAns.flResult, pBuffer->flResult);
+        double diff = abs(clientList[i].protoAns.flResult - pBuffer->flResult);
+        if(diff < 0.0001)
+        {
+          printf("Server's Answer is the same as clients. (FLOAT)\n");
+          mBuffer.message = htonl(1);
+        }
+        else
+        {
+          printf("Client's Answer did not match the server's. (FLOAT)\n");
+          mBuffer.message = htonl(2);
+        }
+      }
+      else
+      {
+        printf("Server's Answer: %d | Client's Answer: %d\n", ntohl(clientList[i].protoAns.inResult), ntohl(pBuffer->inResult));
+        if (ntohl(clientList[i].protoAns.inResult) == ntohl(pBuffer->inResult))
+        {
+          printf("Server's Answer is the same as clients. (INT)\n");
+          mBuffer.message = htonl(1);
+        }
+        else
+        {
+          printf("Client's Answer did not match the server's. (INT)\n");
+          mBuffer.message = htonl(2);
+        }
+      }
+
+      // Send Response to client
+      rv = sendto(sockFD, &mBuffer, sizeof(mBuffer), 0, (struct sockaddr*)&clientAddr, clientLen);
+      if (rv < 0)
+      {
+        perror("send comparison answer");
+        continue;
+      }
+      else
+      {
+        printf("Sent %d bytes\n", rv);
+      }
 
       // Remove client from clientlist
-
-      // Send error to lost client
-      
+      if (noClients > 0)
+      {
+        printf("Client Removed\n");
+        noClients--;
+      }
     }
-    
-
   }
-
   close(sockFD);
   printf("Server is shutdown.\n");
   return 0;  
