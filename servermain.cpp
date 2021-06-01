@@ -18,33 +18,56 @@
 
 using namespace std;
 
-/* Needs to be global, to be reachable by callback and main */
-
-// Global Variables
-int loopCount = 0;
-int terminate = 0;
-int noClients = 0;
-
-/* Call back function, will be called when the SIGALRM is raised when the timer expires. */
-// As anybody can call the handler, its good coding to check the signal number that called it.
-
 struct Client 
 {
   struct sockaddr_in IP;
   struct calcProtocol protoAns;
+  struct timeval clientTime;
+
 };
+
+// Global Variables
+int loopCount = 0;
+int terminate = 0;
+int noClients = 1;
+
+struct Client clientList[30];  
+struct Client nc;
+
+
+/* Call back function, will be called when the SIGALRM is raised when the timer expires. */
+// As anybody can call the handler, its good coding to check the signal number that called it.
+
 
 
 void checkJobList(int signum)
 {
-  printf("Cleared clientList...\n");
+  if (signum == SIGALRM)
+  {
+    struct timeval currentTime;
+    gettimeofday(&currentTime, NULL);
+  
+    printf("\nRemoving clients who did not respond within 10 seconds...\n");
+    for (int i = 0; i < 30; i++)
+    {
+      if (clientList[i].protoAns.id == 0)
+      {
+        continue;
+      }
 
-  if(loopCount > 20)
+      if((currentTime.tv_sec - clientList[i].clientTime.tv_sec) > 10)
+      {
+        clientList[i].protoAns.id = 0;
+        printf("Removed client #%d from the list\n", i);
+      }
+    }
+  }
+
+  if(loopCount > 50)
   {
     printf("I had enough.\n");
     terminate = 1;
   }
-
   return;
 }
 
@@ -145,9 +168,7 @@ int main(int argc, char *argv[])
   struct calcProtocol pBuffer;
   
   uint32_t id = 1;
-  struct Client clientList[30];
-  
-  struct Client nc;
+
   initCalcLib();
 
   
@@ -296,17 +317,15 @@ int main(int argc, char *argv[])
         else
         {
           printf("Sent %d bytes to %s:%d\n", rv, inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
+          
+          // Set client time
+          gettimeofday(&nc.clientTime, NULL);
           clientList[noClients++] = nc;
-  
-         
-
-
-          // set client timer to 10sec
         }
       }
-      // If Lost client a message
       else
       {
+         // If Lost client a message
         struct calcMessage errorMsg;
         errorMsg.type = htons(2);
         errorMsg.message = htonl(2);
@@ -325,12 +344,12 @@ int main(int argc, char *argv[])
       printf("Recieved calcProtocol from IP and Port | %s:%d\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
       bool clientFound = false;
       int i;
-      for (i = 0; i < 30; i++)
+      for (i = 1; i < 30; i++)
       {
         // If Client exists in the list
-        if(pBuffer->id == clientList[i].protoAns.id)   
+        if(pBuffer->id == clientList[i].protoAns.id && clientList[i].protoAns.id > 0)   
         {
-          printf("Client #%d found in list\n", i);
+          printf("Client #%d found in clientList\n", i);
           clientFound = true;
           break;
         }
@@ -339,6 +358,18 @@ int main(int argc, char *argv[])
       if (!clientFound)
       {
         printf("No Client was found.\n");
+
+        struct calcMessage errorMsgTwo;
+        errorMsgTwo.type = htons(2);
+        errorMsgTwo.message = htonl(2);
+        errorMsgTwo.major_version = htons(1);
+        errorMsgTwo.minor_version = htons(0);
+        int sv = sendto(sockFD, &errorMsgTwo, sizeof(errorMsgTwo), 0, (struct sockaddr*)&clientAddr, clientLen);
+        if (sv < 1)
+        {
+          perror("send error 2");
+        }
+        printf("Sent error message to client.\n");
         continue;
       }
 
@@ -382,7 +413,7 @@ int main(int argc, char *argv[])
 
       // Send Response to client
       rv = sendto(sockFD, &mBuffer, sizeof(mBuffer), 0, (struct sockaddr*)&clientAddr, clientLen);
-      if (rv < 0)
+      if (rv < 1)
       {
         perror("send comparison answer");
         continue;
@@ -396,7 +427,7 @@ int main(int argc, char *argv[])
       if (noClients > 0)
       {
         printf("Client Removed\n");
-        noClients--;
+        clientList[i].protoAns.id = 0;
       }
     }
   }

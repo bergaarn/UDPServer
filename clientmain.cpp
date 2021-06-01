@@ -345,6 +345,11 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Server responded with Not applicable/available\n");
     return 13;
   }
+  else if(ntohl(mBuffer.message == 2))
+  {
+    printf("Server sent lost client error.\n");
+    return 14;
+  }
   else
   {
     if(attemptsLeft == 0)
